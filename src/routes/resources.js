@@ -1,4 +1,4 @@
-const path = require("path");
+ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
@@ -68,6 +68,7 @@ function toPublic(r) {
     originalFilename: r.original_filename,
     fileSize: r.file_size,
     createdAt: r.created_at,
+    tags: r.tags ? r.tags.split(",").map(t=>t.trim()).filter(Boolean) : [], isPremium: !!r.is_premium
   };
 }
 
@@ -118,27 +119,59 @@ router.get("/:id", requireAuth, (req, res) => {
   res.json({ resource: toPublic(r) });
 });
 
-// GET /api/resources/:id/file?mode=view|download
-router.get("/:id/file", requireAuth, (req, res) => {
+// PUT /api/resources/:id — admin only, optional replacement file
+router.put("/:id", requireAuth, requireAdmin, upload.single("file"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM resources WHERE id = ?").get(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Resource not found." });
+
+  const { title, type, subject, department, year, author, description, tags, isPremium } = req.body || {};
+
+  const newValues = {
+    title: title && title.trim() ? title.trim() : existing.title,
+    type: TYPES.includes(type) ? type : existing.type,
+    subject: subject && subject.trim() ? subject.trim() : existing.subject,
+    department: DEPT_CODES[department] ? department : existing.department,
+    year: year || existing.year,
+    author: author !== undefined ? author.trim() : existing.author,
+    description: description !== undefined ? description.trim() : existing.description,
+    tags: tags !== undefined ? tags.toLowerCase() : existing.tags,
+    isPremium: isPremium !== undefined ? (isPremium === "true" || isPremium === true ? 1 : 0) : existing.is_premium,
+  };
+
+  let storedFilename = existing.stored_filename;
+  let originalFilename = existing.original_filename;
+  let fileSize = existing.file_size;
+
+  if (req.file) {
+    // Replace the old file on disk, if any
+    if (existing.stored_filename) {
+      const oldPath = path.join(UPLOAD_DIR, existing.stored_filename);
+      fs.unlink(oldPath, () => {});
+    }
+    storedFilename = req.file.filename;
+    originalFilename = req.file.originalname;
+    fileSize = req.file.size;
+  }
+
+  db.prepare(`
+    UPDATE resources SET
+      title = ?, type = ?, subject = ?, department = ?, year = ?, author = ?, description = ?,
+      stored_filename = ?, original_filename = ?, file_size = ?, tags = ?, is_premium = ?
+    WHERE id = ?
+  `).run(
+    newValues.title, newValues.type, newValues.subject, newValues.department, newValues.year,
+    newValues.author, newValues.description, storedFilename, originalFilename, fileSize,
+    newValues.tags, newValues.isPremium,
+    req.params.id
+  );
+
   const r = db.prepare("SELECT * FROM resources WHERE id = ?").get(req.params.id);
-  if (!r) return res.status(404).json({ error: "Resource not found." });
-  if (!r.stored_filename) return res.status(404).json({ error: "No file was uploaded for this resource." });
-
-  const filePath = path.join(UPLOAD_DIR, r.stored_filename);
-  if (!fs.existsSync(filePath)) return res.status(410).json({ error: "The file for this resource is missing from storage." });
-
-  db.prepare("INSERT INTO download_log (resource_id, user_id) VALUES (?, ?)").run(r.id, req.user.id);
-
-  const mode = req.query.mode === "view" ? "inline" : "attachment";
-  const downloadName = (r.original_filename || `${r.title}.pdf`).replace(/[\\/]/g, "_");
-  res.setHeader("Content-Disposition", `${mode}; filename="${downloadName}"`);
-  res.setHeader("Content-Type", "application/pdf");
-  fs.createReadStream(filePath).pipe(res);
+  res.json({ resource: toPublic(r) });
 });
 
 // POST /api/resources — admin only, multipart/form-data with optional "file"
 router.post("/", requireAuth, requireAdmin, upload.single("file"), (req, res) => {
-  const { title, type, subject, department, year, author, description } = req.body || {};
+  const { title, type, subject, department, year, author, description, tags, isPremium } = req.body || {};
 
   if (!title || !String(title).trim()) return res.status(400).json({ error: "Title is required." });
   if (!subject || !String(subject).trim()) return res.status(400).json({ error: "Subject is required." });
@@ -149,8 +182,8 @@ router.post("/", requireAuth, requireAdmin, upload.single("file"), (req, res) =>
   const callNumber = callNumberFor(department, type);
   const insert = db.prepare(`
     INSERT INTO resources
-      (title, type, subject, department, year, author, description, call_number, stored_filename, original_filename, file_size, uploaded_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (title, type, subject, department, year, author, description, call_number, stored_filename, original_filename, file_size, uploaded_by, tags, is_premium)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = insert.run(
     title.trim(),
@@ -164,7 +197,9 @@ router.post("/", requireAuth, requireAdmin, upload.single("file"), (req, res) =>
     req.file ? req.file.filename : null,
     req.file ? req.file.originalname : null,
     req.file ? req.file.size : null,
-    req.user.id
+    req.user.id,
+    (tags || "").toLowerCase(),
+    isPremium === "true" || isPremium === true ? 1 : 0
   );
 
   const r = db.prepare("SELECT * FROM resources WHERE id = ?").get(info.lastInsertRowid);
