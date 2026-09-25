@@ -7,7 +7,7 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
-const { POINTS_PER_COMPLETION, UNLOCK_COST } = require("../config/points");
+const { POINTS_PER_COMPLETION, UNLOCK_COST } = require("../points");
 
 const router = express.Router();
 
