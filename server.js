@@ -42,3 +42,10 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Stackroom E-Library backend running at http://localhost:${PORT}`);
 });
+
+
+const pointsRoutes = require("./src/routes/points");
+const recommendationRoutes = require("./src/routes/recommendations");
+// ...
+app.use("/api", pointsRoutes);
+app.use("/api/recommendations", recommendationRoutes);
