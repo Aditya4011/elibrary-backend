@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stackroom — The E-Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div class="screen active" id="auth-screen">
+  <div class="card-login">
+    <div class="brand-mark"><span class="glyph">S</span><span class="name">Stackroom</span></div>
+    <p class="brand-sub">The E-Library — books, notes, papers &amp; study material, all in one shelf.</p>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-mode="login" type="button">Sign in</button>
+      <button class="auth-tab" data-mode="register" type="button">Create account</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <form id="login-form" class="auth-form active">
+      <div class="field">
+        <label for="li-email">Email</label>
+        <input id="li-email" type="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="li-password">Password</label>
+        <input id="li-password" type="password" required autocomplete="current-password">
+      </div>
+      <div class="field-error" id="login-error"></div>
+      <button class="btn-primary" type="submit">Sign in</button>
+      <p class="login-note">Demo admin account — email <b>admin@stackroom.local</b>, password <b>admin123</b>.</p>
+    </form>
+
+    <!-- REGISTER FORM -->
+    <form id="register-form" class="auth-form">
+      <div class="field">
+        <label for="re-name">Your name</label>
+        <input id="re-name" type="text" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="re-email">Email</label>
+        <input id="re-email" type="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="re-password">Password</label>
+        <input id="re-password" type="password" required autocomplete="new-password" minlength="6">
+      </div>
+      <div class="role-toggle" role="tablist" aria-label="Account type">
+        <button class="role-btn active" data-role="student" type="button">Student</button>
+        <button class="role-btn" data-role="admin" type="button">Librarian / Admin</button>
+      </div>
+      <div class="field" id="reg-dept-field">
+        <label for="re-dept">Department</label>
+        <select id="re-dept">
+          <option>Computer Science</option>
+          <option>Electronics &amp; Communication</option>
+          <option>Mechanical Engineering</option>
+          <option>Civil Engineering</option>
+          <option>Mathematics</option>
+          <option>General / All Departments</option>
+        </select>
+      </div>
+      <div class="field-error" id="register-error"></div>
+      <button class="btn-primary" type="submit">Create account</button>
+      <p class="login-note">Real accounts, hashed passwords, stored in a SQLite database on the server.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ============ APP SCREEN ============ -->
+<div class="screen" id="app-screen">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="glyph">S</span><span class="name">Stackroom</span>
+    </div>
+    <div class="tabs" id="tabs">
+      <button class="tab-btn active" data-view="browse" type="button">Browse</button>
+      <button class="tab-btn" data-view="admin" id="admin-tab-btn" type="button" style="display:none;">Admin panel</button>
+    </div>
+    <div class="topbar-right">
+      <span class="who">Signed in as <b id="who-name"></b> · <span id="who-role"></span></span>
+      <button class="icon-btn" id="theme-btn" type="button" title="Toggle theme">Theme</button>
+      <button class="icon-btn" id="logout-btn" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="filters">
+      <button class="clear-filters" id="clear-filters" type="button" style="margin-bottom:16px;">Clear all filters</button>
+      <div class="filter-group">
+        <h3>Resource type</h3>
+        <div id="filter-type"></div>
+      </div>
+      <div class="filter-group">
+        <h3>Department</h3>
+        <div id="filter-dept"></div>
+      </div>
+      <div class="filter-group">
+        <h3>Academic year</h3>
+        <div id="filter-year"></div>
+      </div>
+    </aside>
+
+    <!-- BROWSE VIEW -->
+    <section class="content" id="view-browse">
+      <div class="content-header">
+        <h1>The shelf</h1>
+        <div class="sub" id="result-count"></div>
+      </div>
+      <div class="searchbar">
+        <input type="text" id="search-input" placeholder="Search by title, subject or author…">
+        <select id="sort-select">
+          <option value="recent">Newest first</option>
+          <option value="title">Title A–Z</option>
+          <option value="subject">Subject A–Z</option>
+        </select>
+      </div>
+      <div class="drawer-label" id="drawer-label">DRAWER — ALL RESOURCES</div>
+      <div class="entry-list" id="entry-list"></div>
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <span class="glyph">∅</span>
+        Nothing on the shelf matches that search.<br>Try a different subject, type or keyword.
+      </div>
+    </section>
+
+    <!-- ADMIN VIEW -->
+    <section class="content" id="view-admin" style="display:none;">
+      <div class="content-header">
+        <h1>Admin panel</h1>
+        <div class="sub">Add, edit or retire resources — upload real PDFs, stored on the server.</div>
+      </div>
+      <div class="admin-toolbar">
+        <div class="drawer-label" style="margin:0;">DRAWER — ALL RESOURCES (<span id="admin-count">0</span>)</div>
+        <button class="act-btn primary" id="add-new-btn" type="button">+ Add resource</button>
+      </div>
+
+      <form class="admin-form" id="admin-form">
+        <h3 id="admin-form-title">Add a resource</h3>
+        <input type="hidden" id="edit-id">
+        <div class="form-grid">
+          <div>
+            <label for="f-title">Title</label>
+            <input id="f-title" required>
+          </div>
+          <div>
+            <label for="f-type">Type</label>
+            <select id="f-type">
+              <option>Book</option>
+              <option>Notes</option>
+              <option>Previous-Year Paper</option>
+              <option>Study Material</option>
+              <option>Reference</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-subject">Subject</label>
+            <input id="f-subject" required>
+          </div>
+          <div>
+            <label for="f-dept">Department</label>
+            <select id="f-dept">
+              <option>Computer Science</option>
+              <option>Electronics &amp; Communication</option>
+              <option>Mechanical Engineering</option>
+              <option>Civil Engineering</option>
+              <option>Mathematics</option>
+              <option>General / All Departments</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-year">Academic year</label>
+            <select id="f-year">
+              <option>1st Year</option>
+              <option>2nd Year</option>
+              <option>3rd Year</option>
+              <option>4th Year</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-author">Author / Source</label>
+            <input id="f-author" placeholder="e.g. Dept. of CS, or author name">
+          </div>
+          <div class="full">
+            <label for="f-description">Short description (shown on the shelf)</label>
+            <textarea id="f-description" placeholder="One or two sentences about this resource…"></textarea>
+          </div>
+          <div class="full">
+            <label for="f-file">PDF file <span id="f-file-note" class="hint"></span></label>
+            <input id="f-file" type="file" accept="application/pdf">
+          </div>
+        </div>
+        <div class="field-error" id="admin-form-error"></div>
+        <div class="form-actions">
+          <button type="submit" class="act-btn primary">Save resource</button>
+          <button type="button" class="act-btn" id="cancel-form-btn">Cancel</button>
+        </div>
+      </form>
+
+      <div class="entry-list" id="admin-entry-list"></div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
