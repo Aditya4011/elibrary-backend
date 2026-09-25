@@ -51,4 +51,36 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_resources_year ON resources(year);
 `);
 
+function columnExists(table, column) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+}
+if (!columnExists("users", "points")) {
+  db.exec("ALTER TABLE users ADD COLUMN points INTEGER NOT NULL DEFAULT 0");
+}
+if (!columnExists("resources", "tags")) {
+  db.exec("ALTER TABLE resources ADD COLUMN tags TEXT NOT NULL DEFAULT ''");
+}
+if (!columnExists("resources", "is_premium")) {
+  db.exec("ALTER TABLE resources ADD COLUMN is_premium INTEGER NOT NULL DEFAULT 0");
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS completions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, resource_id)
+  );
+  CREATE TABLE IF NOT EXISTS unlocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    unlocked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, resource_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_completions_user ON completions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_unlocks_user ON unlocks(user_id);
+`);
+
 module.exports = db;
